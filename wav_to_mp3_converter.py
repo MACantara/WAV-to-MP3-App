@@ -6,54 +6,82 @@ from tkinter.ttk import Progressbar, Style
 from pathlib import Path
 import subprocess
 import shutil
+import logging
 from google_services import GoogleServices
+from datetime import datetime
+
+# Set up logging
+def setup_logging():
+    log_dir = os.path.dirname(os.path.abspath(__file__))
+    log_file = os.path.join(log_dir, 'podcast_uploader.log')
+    
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+    return logging.getLogger(__name__)
 
 class ModernConverter:
     def __init__(self):
-        # Check for FFmpeg
-        if not self.check_ffmpeg():
-            messagebox.showerror("Error", "FFmpeg is not installed or not found in PATH. Please install FFmpeg to use this application.")
-            exit(1)
-
-        self.root = tk.Tk()
-        self.root.title("Podcast Episode Uploader")
-        self.root.geometry("800x600")
-        self.root.configure(bg="#f0f0f0")
-        
-        # Configure style
-        self.style = Style()
-        self.style.configure("Modern.TButton", padding=10, font=("Segoe UI", 10))
-        self.style.configure("Conversion.Horizontal.TProgressbar", 
-                           background='#2196F3', 
-                           troughcolor='#E0E0E0',
-                           thickness=15)
-        self.style.configure("Upload.Horizontal.TProgressbar", 
-                           background='#4CAF50', 
-                           troughcolor='#E0E0E0',
-                           thickness=15)
-
-        self.source_files = []
-        self.output_var = tk.StringVar()
-        self.conversion_progress_var = tk.DoubleVar()
-        self.upload_progress_var = tk.DoubleVar()
-        self.current_file_var = tk.StringVar(value="Ready to convert...")
-        
-        # Google Drive folders
-        self.google_drive_folder = tk.StringVar()
-        self.folders_list = []
-        
-        # Google Sheets
-        self.spreadsheet_id = tk.StringVar()
-        self.sheet_range = tk.StringVar(value="Sheet1!A:A")  # Default range
-        
         try:
-            self.google_services = GoogleServices()
-            self.folders_list = self.google_services.get_folder_list()
+            self.logger = setup_logging()
+            self.logger.info("Starting application...")
+            
+            # Check for FFmpeg
+            if not self.check_ffmpeg():
+                messagebox.showerror("Error", "FFmpeg is not installed or not found in PATH. Please install FFmpeg to use this application.")
+                exit(1)
+
+            self.root = tk.Tk()
+            self.root.title("Podcast Episode Uploader")
+            self.root.geometry("800x600")
+            self.root.configure(bg="#f0f0f0")
+            
+            # Configure style
+            self.style = Style()
+            self.style.configure("Modern.TButton", padding=10, font=("Segoe UI", 10))
+            self.style.configure("Conversion.Horizontal.TProgressbar", 
+                               background='#2196F3', 
+                               troughcolor='#E0E0E0',
+                               thickness=15)
+            self.style.configure("Upload.Horizontal.TProgressbar", 
+                               background='#4CAF50', 
+                               troughcolor='#E0E0E0',
+                               thickness=15)
+
+            self.source_files = []
+            self.output_var = tk.StringVar()
+            self.conversion_progress_var = tk.DoubleVar()
+            self.upload_progress_var = tk.DoubleVar()
+            self.current_file_var = tk.StringVar(value="Ready to convert...")
+            
+            # Google Drive folders
+            self.google_drive_folder = tk.StringVar()
+            self.folders_list = []
+            
+            # Google Sheets
+            self.spreadsheet_id = tk.StringVar()
+            self.sheet_range = tk.StringVar(value="Sheet1!A:A")  # Default range
+            
+            try:
+                self.google_services = GoogleServices()
+                self.folders_list = self.google_services.get_folder_list()
+                self.logger.info("Google Services initialized successfully")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize Google Services: {str(e)}")
+                messagebox.showerror("Google Services Error", 
+                                   "Failed to initialize Google Services. Please ensure credentials.json is present.\n\nError: " + str(e))
+            
+            self.setup_ui()
+
         except Exception as e:
-            messagebox.showerror("Google Services Error", 
-                               "Failed to initialize Google Services. Please ensure credentials.json is present.\n\nError: " + str(e))
-        
-        self.setup_ui()
+            self.logger.error(f"Error during initialization: {str(e)}")
+            messagebox.showerror("Error", f"Error during initialization: {str(e)}")
+            raise
 
     def setup_ui(self):
         # Main container
@@ -347,6 +375,7 @@ class ModernConverter:
                 self.update_conversion_progress(progress)
 
             except Exception as e:
+                self.logger.error(f"Error converting {file_path}: {str(e)}")
                 messagebox.showerror("Error", f"Error converting {file_path}: {str(e)}")
 
         self.current_file_var.set("Conversion complete!")
@@ -357,14 +386,17 @@ class ModernConverter:
     def upload_files(self):
         """Upload MP3 files to Google Drive and update sheets."""
         if not hasattr(self, 'converted_files') or not self.converted_files:
+            self.logger.error("No converted files found. Please convert files first.")
             messagebox.showerror("Error", "No converted files found. Please convert files first.")
             return
 
         if not self.spreadsheet_id.get():
+            self.logger.error("Please select a Google Sheet first.")
             messagebox.showerror("Error", "Please select a Google Sheet first.")
             return
 
         if not self.sheet_combobox.get():
+            self.logger.error("Please select a sheet/tab first.")
             messagebox.showerror("Error", "Please select a sheet/tab first.")
             return
 
@@ -395,6 +427,7 @@ class ModernConverter:
                     uploaded_files.append([filename, web_link])
 
             except Exception as e:
+                self.logger.error(f"Error uploading {file_path}: {str(e)}")
                 messagebox.showerror("Error", f"Error uploading {file_path}: {str(e)}")
 
         # Update Google Sheets
@@ -412,6 +445,7 @@ class ModernConverter:
                     self.handle_unmatched_files
                 )
             except Exception as e:
+                self.logger.error(f"Error updating Google Sheets: {str(e)}")
                 messagebox.showerror("Error", f"Error updating Google Sheets: {str(e)}\nSpreadsheet ID: {self.spreadsheet_id.get()}\nRange: {self.sheet_range.get()}")
                 return
 
@@ -422,10 +456,12 @@ class ModernConverter:
     def start_conversion(self):
         """Start the conversion process."""
         if not self.source_files:
+            self.logger.error("Please select WAV files or a folder.")
             messagebox.showerror("Error", "Please select WAV files or a folder.")
             return
 
         if not self.output_var.get():
+            self.logger.error("Please select an output folder.")
             messagebox.showerror("Error", "Please select an output folder.")
             return
 
@@ -444,14 +480,17 @@ class ModernConverter:
     def start_upload(self):
         """Start the upload process."""
         if not self.get_selected_folder_id():
+            self.logger.error("Please select a Google Drive folder.")
             messagebox.showerror("Error", "Please select a Google Drive folder.")
             return
 
         if not self.spreadsheet_combobox.get():
+            self.logger.error("Please select a Google Sheet.")
             messagebox.showerror("Error", "Please select a Google Sheet.")
             return
 
         if not self.sheet_combobox.get():
+            self.logger.error("Please select a sheet/tab.")
             messagebox.showerror("Error", "Please select a sheet/tab.")
             return
 
@@ -492,6 +531,7 @@ class ModernConverter:
             self.spreadsheets = {name: id for id, name in spreadsheets}
             self.spreadsheet_combobox['values'] = list(self.spreadsheets.keys())
         except Exception as e:
+            self.logger.error(f"Error loading spreadsheets: {str(e)}")
             messagebox.showerror("Error", f"Error loading spreadsheets: {str(e)}")
 
     def on_spreadsheet_selected(self, event=None):
@@ -509,6 +549,7 @@ class ModernConverter:
                     self.sheet_combobox.set(sheets[0])
                     self.on_sheet_selected()
             except Exception as e:
+                self.logger.error(f"Error loading sheets: {str(e)}")
                 messagebox.showerror("Error", f"Error loading sheets: {str(e)}")
 
     def on_sheet_selected(self, event=None):
@@ -539,6 +580,99 @@ class ModernConverter:
     def run(self):
         self.root.mainloop()
 
+class GoogleAuthWindow:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Google Authentication")
+        self.root.geometry("400x200")
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        self.logger = setup_logging()
+        
+        # Authentication status
+        self.auth_successful = False
+        
+        # Create widgets
+        self.create_widgets()
+        
+        # Center the window
+        self.center_window()
+    
+    def center_window(self):
+        """Center the window on the screen."""
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+    
+    def create_widgets(self):
+        # Instructions
+        tk.Label(self.root, text="Google Authentication Required", font=("Arial", 14, "bold")).pack(pady=10)
+        tk.Label(self.root, text="Please click 'Authenticate' to log in with your Google account", 
+                 wraplength=350).pack(pady=10)
+        
+        # Status label
+        self.status_label = tk.Label(self.root, text="", wraplength=350)
+        self.status_label.pack(pady=5)
+        
+        # Authenticate Button
+        self.auth_button = tk.Button(self.root, text="Authenticate", command=self.authenticate)
+        self.auth_button.pack(pady=20)
+    
+    def authenticate(self):
+        try:
+            self.status_label.config(text="Authenticating...", fg="blue")
+            self.auth_button.config(state="disabled")
+            self.root.update()
+            
+            # Attempt to initialize Google Services
+            google_services = GoogleServices()
+            
+            # If we get here, authentication was successful
+            self.auth_successful = True
+            self.logger.info("Google authentication successful")
+            self.root.quit()
+            self.root.destroy()
+        except Exception as e:
+            self.logger.error(f"Authentication failed: {e}")
+            self.status_label.config(text=f"Authentication failed. Please try again.", fg="red")
+            self.auth_button.config(state="normal")
+            messagebox.showerror("Authentication Error", 
+                               f"Failed to authenticate. Please try again.\n\nError: {str(e)}")
+    
+    def on_closing(self):
+        if not self.auth_successful:
+            if messagebox.askokcancel("Quit", "Authentication is required to use the app. Do you want to exit?"):
+                self.root.quit()
+                self.root.destroy()
+                sys.exit(0)
+    
+    def run(self):
+        """Run the authentication window and return whether authentication was successful."""
+        self.root.mainloop()
+        return self.auth_successful
+
+def run_authentication():
+    """Run the authentication window before main application."""
+    auth_window = GoogleAuthWindow()
+    return auth_window.run()
+
+def main():
+    try:
+        # First, run authentication
+        if not run_authentication():
+            sys.exit(0)
+        
+        # If authentication is successful, proceed with main application
+        app = ModernConverter()
+        app.run()
+    except Exception as e:
+        logging.error(f"Critical error: {str(e)}", exc_info=True)
+        messagebox.showerror("Critical Error", 
+                           f"An error occurred: {str(e)}\nCheck the logs for details.")
+        sys.exit(1)
+
 if __name__ == "__main__":
-    app = ModernConverter()
-    app.run()
+    main()

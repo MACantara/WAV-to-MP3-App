@@ -1,5 +1,6 @@
 import os
 import pickle
+import sys
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -8,14 +9,84 @@ from googleapiclient.http import MediaFileUpload
 
 class GoogleServices:
     def __init__(self):
-        self.SCOPES = [
-            'https://www.googleapis.com/auth/drive',
-            'https://www.googleapis.com/auth/spreadsheets'
-        ]
-        self.creds = None
-        self.initialize_credentials()
-        self.drive_service = build('drive', 'v3', credentials=self.creds)
-        self.sheets_service = build('sheets', 'v4', credentials=self.creds)
+        """Initialize the Google Services."""
+        try:
+            # Get the directory where the executable/script is located
+            if getattr(sys, 'frozen', False):
+                # If the application is run as a bundle (exe)
+                application_path = sys._MEIPASS
+                working_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+            else:
+                # If the application is run as a script
+                application_path = os.path.dirname(os.path.abspath(__file__))
+                working_dir = application_path
+
+            # Set up paths for credentials and token
+            credentials_path = os.path.join(application_path, 'credentials.json')
+            token_path = os.path.join(working_dir, 'token.pickle')
+
+            print(f"Credentials path: {credentials_path}")
+            print(f"Token path: {token_path}")
+
+            self.scopes = [
+                'https://www.googleapis.com/auth/drive',
+                'https://www.googleapis.com/auth/spreadsheets'
+            ]
+
+            self.creds = None
+
+            # Check if token.pickle exists and is valid
+            if os.path.exists(token_path):
+                try:
+                    with open(token_path, 'rb') as token:
+                        self.creds = pickle.load(token)
+                    print("Loaded existing token")
+                except Exception as e:
+                    print(f"Error loading token: {str(e)}")
+                    self.creds = None
+
+            # If no valid credentials available, let the user log in
+            if not self.creds or not self.creds.valid:
+                if self.creds and self.creds.expired and self.creds.refresh_token:
+                    print("Token expired, refreshing...")
+                    try:
+                        self.creds.refresh(Request())
+                        print("Token refreshed successfully")
+                    except Exception as e:
+                        print(f"Error refreshing token: {str(e)}")
+                        self.creds = None
+
+                if not self.creds:
+                    print("No valid credentials, starting OAuth flow...")
+                    if not os.path.exists(credentials_path):
+                        raise FileNotFoundError(
+                            f"credentials.json not found at {credentials_path}. Please ensure it exists in the same directory as the application."
+                        )
+                    try:
+                        flow = InstalledAppFlow.from_client_secrets_file(credentials_path, self.scopes)
+                        self.creds = flow.run_local_server(port=0)
+                        print("OAuth flow completed successfully")
+                    except Exception as e:
+                        raise Exception(f"Failed to complete OAuth flow: {str(e)}")
+
+                # Save the credentials for the next run
+                try:
+                    with open(token_path, 'wb') as token:
+                        pickle.dump(self.creds, token)
+                    print(f"Saved new token to {token_path}")
+                except Exception as e:
+                    print(f"Warning: Could not save token: {str(e)}")
+
+            # Create API service instances
+            try:
+                self.drive_service = build('drive', 'v3', credentials=self.creds)
+                self.sheets_service = build('sheets', 'v4', credentials=self.creds)
+                print("Successfully created API service instances")
+            except Exception as e:
+                raise Exception(f"Failed to create API services: {str(e)}")
+
+        except Exception as e:
+            raise Exception(f"Failed to initialize Google Services: {str(e)}")
 
     def initialize_credentials(self):
         """Authenticate with Google services."""
@@ -37,11 +108,11 @@ class GoogleServices:
                         os.remove('token.pickle')
                     self.creds = None
                     flow = InstalledAppFlow.from_client_secrets_file(
-                        'credentials.json', self.SCOPES)
+                        'credentials.json', self.scopes)
                     self.creds = flow.run_local_server(port=0)
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', self.SCOPES)
+                    'credentials.json', self.scopes)
                 self.creds = flow.run_local_server(port=0)
             
             with open('token.pickle', 'wb') as token:
