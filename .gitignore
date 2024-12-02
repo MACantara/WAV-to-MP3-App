@@ -1,0 +1,79 @@
+# Google API credentials
+credentials.json
+token.pickle
+client_secret*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.env
+.venv
+env.bak/
+venv.bak/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Operating System
+.DS_Store
+Thumbs.db
+*.lnk
+Desktop.ini
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Audio files
+*.mp3
+*.wav
+*.m4a
+*.aac
+*.ogg
+*.flac
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*~
+
+# Local configuration
+config.ini
+settings.json
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
